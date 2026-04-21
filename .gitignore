@@ -1,0 +1,32 @@
+# ⚠️ CRITIQUE — Ne jamais committer ces fichiers
+.env
+.env.local
+.env.production
+.env.staging
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# SQLite (développement uniquement)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Build
+dist/
+build/
