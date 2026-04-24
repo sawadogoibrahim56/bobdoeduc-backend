@@ -7,6 +7,7 @@ const helmet    = require('helmet');
 const cors      = require('cors');
 const morgan    = require('morgan');
 const rateLimit = require('express-rate-limit');
+const path      = require('path');
 
 const authRouter  = require('./src/auth/auth.routes');
 const { quizRouter } = require('./src/guards/auth.middleware');
@@ -43,16 +44,12 @@ app.use('/api/admin',        adminRouter);   // ← NOUVEAU en version B
 app.use('/api/users',        usersRouter);
 app.use('/api/questions',    qsRouter);
 
-// Servir le panel admin statiquement (optionnel)
-const path = require('path');
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, '../../frontend/admin.html'));
-});
-
+// Route de santé
 app.get('/health', (req, res) => res.json({
   status:'ok', version:'B', db:process.env.DB_TYPE, env:process.env.NODE_ENV
 }));
 
+// Gestion des erreurs et routes non trouvées
 app.use((req, res) => res.status(404).json({ error:'Route non trouvée' }));
 app.use((err, req, res, next) => {
   console.error('[ERR]', err.message);
@@ -66,5 +63,5 @@ app.listen(PORT, () => {
   console.log(`    Env         : ${process.env.NODE_ENV || 'development'}`);
   console.log(`    Admin email : ${process.env.ADMIN_EMAIL || '⚠️  non configuré'}`);
   console.log(`    Email mode  : ${process.env.EMAIL_PROVIDER || 'console (dev)'}`);
-  console.log(`    Panel admin : http://localhost:${PORT}/admin\n`);
+  console.log(`    Panel admin : Servi depuis le frontend\n`);
 });
