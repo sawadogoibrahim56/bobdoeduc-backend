@@ -7,14 +7,13 @@ const helmet    = require('helmet');
 const cors      = require('cors');
 const morgan    = require('morgan');
 const rateLimit = require('express-rate-limit');
-const path      = require('path');
 
-const authRouter  = require('./src/auth/auth.routes');
-const { quizRouter } = require('./src/guards/auth.middleware');
-const subRouter   = require('./src/subscription/subscription.routes');
-const adminRouter = require('./src/admin/admin.routes');
-const usersRouter = require('./src/users/users.routes');
-const qsRouter    = require('./src/questions/questions.routes');
+const authRouter     = require('./src/auth/auth.routes');
+const { quizRouter } = require('./src/quiz/quiz.routes');
+const subRouter      = require('./src/subscription/subscription.routes');
+const adminRouter    = require('./src/admin/admin.routes');
+const usersRouter    = require('./src/users/users.routes');
+const qsRouter       = require('./src/questions/questions.routes');
 
 const app = express();
 
@@ -33,23 +32,26 @@ app.use('/api/',              rateLimit({ windowMs:15*60*1000, max:100, message:
 app.use('/api/auth/login',    rateLimit({ windowMs:60*60*1000, max:10,  message:{error:'Trop de tentatives.'} }));
 app.use('/api/auth/register', rateLimit({ windowMs:60*60*1000, max:10,  message:{error:'Trop de tentatives.'} }));
 app.use('/api/auth/send-otp', rateLimit({ windowMs:60*1000,    max:3,   message:{error:'Trop d\'envois OTP.'} }));
-// Rate limit sur les demandes d'abonnement (max 3 par heure par IP)
 app.use('/api/subscription/request', rateLimit({ windowMs:60*60*1000, max:3, message:{error:'Trop de demandes.'} }));
 
 // ROUTES
 app.use('/api/auth',         authRouter);
 app.use('/api/quiz',         quizRouter);
 app.use('/api/subscription', subRouter);
-app.use('/api/admin',        adminRouter);   // ← NOUVEAU en version B
+app.use('/api/admin',        adminRouter);
 app.use('/api/users',        usersRouter);
 app.use('/api/questions',    qsRouter);
 
-// Route de santé
+// Servir le panel admin statiquement (optionnel)
+const path = require('path');
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../frontend/admin.html'));
+});
+
 app.get('/health', (req, res) => res.json({
   status:'ok', version:'B', db:process.env.DB_TYPE, env:process.env.NODE_ENV
 }));
 
-// Gestion des erreurs et routes non trouvées
 app.use((req, res) => res.status(404).json({ error:'Route non trouvée' }));
 app.use((err, req, res, next) => {
   console.error('[ERR]', err.message);
@@ -63,5 +65,5 @@ app.listen(PORT, () => {
   console.log(`    Env         : ${process.env.NODE_ENV || 'development'}`);
   console.log(`    Admin email : ${process.env.ADMIN_EMAIL || '⚠️  non configuré'}`);
   console.log(`    Email mode  : ${process.env.EMAIL_PROVIDER || 'console (dev)'}`);
-  console.log(`    Panel admin : Servi depuis le frontend\n`);
+  console.log(`    Panel admin : http://localhost:${PORT}/admin\n`);
 });
