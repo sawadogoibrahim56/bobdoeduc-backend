@@ -8,18 +8,18 @@ const cors      = require('cors');
 const morgan    = require('morgan');
 const rateLimit = require('express-rate-limit');
 
-const authRouter     = require('./src/auth/auth.routes');
-const { quizRouter } = require('./src/quiz/quiz.routes');
-const subRouter      = require('./src/subscription/subscription.routes');
-const adminRouter    = require('./src/admin/admin.routes');
-const usersRouter    = require('./src/users/users.routes');
-const qsRouter       = require('./src/questions/questions.routes');
+const authRouter  = require('./src/auth/auth.routes');
+const { quizRouter } = require('./src/guards/auth.middleware');
+const subRouter   = require('./src/subscription/subscription.routes');
+const adminRouter = require('./src/admin/admin.routes');
+const usersRouter = require('./src/users/users.routes');
+const qsRouter    = require('./src/questions/questions.routes');
 
 const app = express();
 
 app.use(helmet({ contentSecurityPolicy:false, hsts:{ maxAge:31536000 } }));
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL || 'http://https://bobdoeduc-frontend-1.onrender.com',
   methods: ['GET','POST','PUT','PATCH','DELETE'],
   allowedHeaders: ['Content-Type','Authorization','X-Admin-Key'],
   credentials: true
@@ -32,13 +32,14 @@ app.use('/api/',              rateLimit({ windowMs:15*60*1000, max:100, message:
 app.use('/api/auth/login',    rateLimit({ windowMs:60*60*1000, max:10,  message:{error:'Trop de tentatives.'} }));
 app.use('/api/auth/register', rateLimit({ windowMs:60*60*1000, max:10,  message:{error:'Trop de tentatives.'} }));
 app.use('/api/auth/send-otp', rateLimit({ windowMs:60*1000,    max:3,   message:{error:'Trop d\'envois OTP.'} }));
+// Rate limit sur les demandes d'abonnement (max 3 par heure par IP)
 app.use('/api/subscription/request', rateLimit({ windowMs:60*60*1000, max:3, message:{error:'Trop de demandes.'} }));
 
 // ROUTES
 app.use('/api/auth',         authRouter);
 app.use('/api/quiz',         quizRouter);
 app.use('/api/subscription', subRouter);
-app.use('/api/admin',        adminRouter);
+app.use('/api/admin',        adminRouter);   // ← NOUVEAU en version B
 app.use('/api/users',        usersRouter);
 app.use('/api/questions',    qsRouter);
 
