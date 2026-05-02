@@ -2,8 +2,6 @@
 // server.js — BobdoEduc VERSION B (CORRIGÉ)
 // ============================================================
 'use strict';
-app.set('trust proxy', 1);
-
 require('dotenv').config();
 const express   = require('express');
 const helmet    = require('helmet');
