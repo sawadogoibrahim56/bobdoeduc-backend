@@ -1,11 +1,11 @@
 // ============================================================
-// src/admin/admin.routes.js — Panel Admin BobdoEduc Version B
+// src/admin/admin.routes.js â€” Panel Admin BobdoEduc Version B
 // ============================================================
-// Routes protégées par X-Admin-Key (header)
+// Routes protÃ©gÃ©es par X-Admin-Key (header)
 // Permet de:
 //   - Voir toutes les demandes d'abonnement
 //   - Activer / Rejeter une demande
-//   - Activer via lien email (token signé)
+//   - Activer via lien email (token signÃ©)
 // ============================================================
 const express = require('express');
 const crypto  = require('crypto');
@@ -22,7 +22,7 @@ const PLANS = {
   premium_yearly:  { price:15000, days:365 }
 };
 
-// ── Utilitaire: activer un abonnement ────────────────────────
+// â”€â”€ Utilitaire: activer un abonnement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function activateSubscription(db, request) {
   const now        = new Date();
   const starts_at  = new Date(request.planned_starts_at || now);
@@ -32,7 +32,7 @@ async function activateSubscription(db, request) {
     return d;
   })());
 
-  // 1. Mettre à jour le user
+  // 1. Mettre Ã  jour le user
   await db.update('users', {
     plan:               request.plan,
     subscription_start: starts_at.toISOString(),
@@ -40,7 +40,7 @@ async function activateSubscription(db, request) {
     subscription_ref:   request.id
   }, { id:request.user_id });
 
-  // 2. Créer l'entrée dans subscriptions
+  // 2. CrÃ©er l'entrÃ©e dans subscriptions
   await db.insert('subscriptions', {
     id:         crypto.randomBytes(16).toString('hex'),
     user_id:    request.user_id,
@@ -54,7 +54,7 @@ async function activateSubscription(db, request) {
     expires_at: expires_at.toISOString()
   });
 
-  // 3. Marquer la demande comme approuvée
+  // 3. Marquer la demande comme approuvÃ©e
   await db.update('subscription_requests', {
     status:       'approved',
     reviewed_at:  new Date().toISOString(),
@@ -64,14 +64,14 @@ async function activateSubscription(db, request) {
   return { starts_at, expires_at };
 }
 
-// ── GET /api/admin/subscription/quick-action ─────────────────
-// Lien cliquable dans l'email — pas besoin de panel, juste un clic
+// â”€â”€ GET /api/admin/subscription/quick-action â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Lien cliquable dans l'email â€” pas besoin de panel, juste un clic
 // ?token=xxx&request_id=yyy&action=approve|reject
 router.get('/subscription/quick-action', async (req, res) => {
   const { token, request_id, action } = req.query;
 
   if (!token || !request_id || !['approve','reject'].includes(action)) {
-    return res.status(400).send(htmlPage('Lien invalide', '❌ Paramètres manquants ou incorrects.', '#E53935'));
+    return res.status(400).send(htmlPage('Lien invalide', 'âŒ ParamÃ¨tres manquants ou incorrects.', '#E53935'));
   }
 
   try {
@@ -85,30 +85,26 @@ router.get('/subscription/quick-action', async (req, res) => {
     const req2 = requests[0];
 
     if (!req2)
-      return res.status(404).send(htmlPage('Non trouvé', '❌ Demande introuvable ou lien invalide.', '#E53935'));
+      return res.status(404).send(htmlPage('Non trouvÃ©', 'âŒ Demande introuvable ou lien invalide.', '#E53935'));
 
     if (req2.status !== 'pending')
-      return res.status(400).send(htmlPage('Déjà traitée',
-        `ℹ️ Cette demande a déjà été <strong>${req2.status === 'approved' ? 'approuvée ✅' : 'rejetée ❌'}</strong>.`, '#1A73E8'));
+      return res.status(400).send(htmlPage('DÃ©jÃ  traitÃ©e',
+        `â„¹ï¸ Cette demande a dÃ©jÃ  Ã©tÃ© <strong>${req2.status === 'approved' ? 'approuvÃ©e âœ…' : 'rejetÃ©e âŒ'}</strong>.`, '#1A73E8'));
 
     if (new Date(req2.token_expires_at) < new Date())
-      return res.status(410).send(htmlPage('Lien expiré', '⏰ Ce lien a expiré (validité 72h). Utilisez le panel admin.', '#E8B923'));
+      return res.status(410).send(htmlPage('Lien expirÃ©', 'â° Ce lien a expirÃ© (validitÃ© 72h). Utilisez le panel admin.', '#E8B923'));
 
     const user = await db.findOne('users', { id:req2.user_id });
 
     if (action === 'approve') {
       const { expires_at } = await activateSubscription(db, req2);
 
-      // Email de confirmation à l'utilisateur
-      if (user?.email) {
-        await sendEmail({
-          to: user.email,
-          ...templateActivated({ pseudo:user.pseudo, plan:req2.plan, expiresAt:expires_at })
-        });
-      }
+      // Email de confirmation Ã  l'utilisateur
+      // Note: email chiffrÃ© - notification envoyÃ©e Ã  l'admin uniquement
+      console.log(`[admin] Abonnement activÃ© pour ${user?.pseudo}`);
 
-      return res.send(htmlPage('Abonnement activé ✅',
-        `✅ L'abonnement <strong>${req2.plan}</strong> de <strong>${user?.pseudo}</strong> a été activé jusqu'au <strong>${expires_at.toLocaleDateString('fr-FR')}</strong>.`,
+      return res.send(htmlPage('Abonnement activÃ© âœ…',
+        `âœ… L'abonnement <strong>${req2.plan}</strong> de <strong>${user?.pseudo}</strong> a Ã©tÃ© activÃ© jusqu'au <strong>${expires_at.toLocaleDateString('fr-FR')}</strong>.`,
         '#00A854'
       ));
 
@@ -118,24 +114,19 @@ router.get('/subscription/quick-action', async (req, res) => {
         reject_reason: 'Rejet via lien email'
       }, { id:req2.id });
 
-      if (user?.email) {
-        await sendEmail({
-          to: user.email,
-          ...templateRejected({ pseudo:user.pseudo, reason:'Paiement non confirmé' })
-        });
-      }
+      console.log(`[admin] Demande rejetÃ©e pour ${user?.pseudo}`);
 
-      return res.send(htmlPage('Demande rejetée',
-        `❌ La demande de <strong>${user?.pseudo}</strong> a été rejetée.`, '#E53935'));
+      return res.send(htmlPage('Demande rejetÃ©e',
+        `âŒ La demande de <strong>${user?.pseudo}</strong> a Ã©tÃ© rejetÃ©e.`, '#E53935'));
     }
 
   } catch(e) {
     console.error('[admin/quick-action]', e);
-    return res.status(500).send(htmlPage('Erreur', '❌ Erreur serveur: '+e.message, '#E53935'));
+    return res.status(500).send(htmlPage('Erreur', 'âŒ Erreur serveur: '+e.message, '#E53935'));
   }
 });
 
-// ── GET /api/admin/requests ───────────────────────────────────
+// â”€â”€ GET /api/admin/requests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Lister toutes les demandes (pour le panel admin)
 router.get('/requests', adminMiddleware, async (req, res) => {
   try {
@@ -166,7 +157,7 @@ router.get('/requests', adminMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error:'Erreur.' }); }
 });
 
-// ── POST /api/admin/requests/:id/approve ─────────────────────
+// â”€â”€ POST /api/admin/requests/:id/approve â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/requests/:id/approve', adminMiddleware, async (req, res) => {
   try {
     const db = getDatabase();
@@ -176,28 +167,23 @@ router.post('/requests/:id/approve', adminMiddleware, async (req, res) => {
     const request = requests[0];
     if (!request) return res.status(404).json({ error:'Demande introuvable.' });
     if (request.status !== 'pending')
-      return res.status(400).json({ error:`Demande déjà ${request.status}.` });
+      return res.status(400).json({ error:`Demande dÃ©jÃ  ${request.status}.` });
 
     const { expires_at } = await activateSubscription(db, request);
     const user = await db.findOne('users', { id:request.user_id });
 
-    if (user?.email) {
-      await sendEmail({
-        to: user.email,
-        ...templateActivated({ pseudo:user.pseudo, plan:request.plan, expiresAt:expires_at })
-      });
-    }
+    console.log(`[admin] Activation par panel: ${user?.pseudo}`);
 
     res.json({
       success:     true,
-      message:     `Abonnement ${request.plan} activé pour ${user?.pseudo}`,
+      message:     `Abonnement ${request.plan} activÃ© pour ${user?.pseudo}`,
       expires_at:  expires_at.toISOString(),
       user_pseudo: user?.pseudo
     });
   } catch(e) { res.status(500).json({ error:'Erreur activation.' }); }
 });
 
-// ── POST /api/admin/requests/:id/reject ──────────────────────
+// â”€â”€ POST /api/admin/requests/:id/reject â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/requests/:id/reject', adminMiddleware, async (req, res) => {
   try {
     const db = getDatabase();
@@ -207,7 +193,7 @@ router.post('/requests/:id/reject', adminMiddleware, async (req, res) => {
     const request = requests[0];
     if (!request) return res.status(404).json({ error:'Demande introuvable.' });
     if (request.status !== 'pending')
-      return res.status(400).json({ error:`Déjà ${request.status}.` });
+      return res.status(400).json({ error:`DÃ©jÃ  ${request.status}.` });
 
     const { reason } = req.body;
     await db.update('subscription_requests', {
@@ -217,18 +203,13 @@ router.post('/requests/:id/reject', adminMiddleware, async (req, res) => {
     }, { id:request.id });
 
     const user = await db.findOne('users', { id:request.user_id });
-    if (user?.email) {
-      await sendEmail({
-        to: user.email,
-        ...templateRejected({ pseudo:user.pseudo, reason })
-      });
-    }
+    console.log(`[admin] Rejet par panel: ${user?.pseudo}`);
 
-    res.json({ success:true, message:`Demande rejetée pour ${user?.pseudo}` });
+    res.json({ success:true, message:`Demande rejetÃ©e pour ${user?.pseudo}` });
   } catch(e) { res.status(500).json({ error:'Erreur rejet.' }); }
 });
 
-// ── GET /api/admin/stats ──────────────────────────────────────
+// â”€â”€ GET /api/admin/stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/stats', adminMiddleware, async (req, res) => {
   try {
     const db = getDatabase();
@@ -249,7 +230,7 @@ router.get('/stats', adminMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error:'Erreur stats.' }); }
 });
 
-// ── Utilitaire: page HTML simple pour les liens email ─────────
+// â”€â”€ Utilitaire: page HTML simple pour les liens email â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function htmlPage(title, message, color='#1A73E8') {
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>${title}</title>
   <style>body{font-family:Arial,sans-serif;background:#f4f4f4;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
@@ -257,7 +238,8 @@ function htmlPage(title, message, color='#1A73E8') {
   h2{color:${color};margin-top:0}p{color:#444;line-height:1.6}
   a{display:inline-block;margin-top:20px;background:${color};color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold}
   </style></head>
-  <body><div class="box"><h2>${title}</h2><p>${message}</p><a href="javascript:history.back()">← Retour</a></div></body></html>`;
+  <body><div class="box"><h2>${title}</h2><p>${message}</p><a href="javascript:history.back()">â† Retour</a></div></body></html>`;
 }
 
 module.exports = router;
+                                   
