@@ -178,8 +178,8 @@ router.post('/register', async (req, res) => {
       userData.phone_encrypted = encryptData(phoneNorm);
     } else {
       return res.status(400).json({ error:'Contact invalide.' });
-    }
-
+        }
+           
     const existingPs = await db.findOne('users', { pseudo });
     if (existingPs) return res.status(409).json({ error:'Ce pseudo est dÃ©jÃ  pris.' });
 
@@ -308,4 +308,4 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 module.exports = router;
-      
+    
