@@ -1,6 +1,6 @@
 // ============================================================
-// src/subscription/subscription.routes.js — BOBDOEDUC VERSION B
-// Activation MANUELLE — l'admin vérifie et active manuellement
+// src/subscription/subscription.routes.js â€” BOBDOEDUC VERSION B
+// Activation MANUELLE â€” l'admin vÃ©rifie et active manuellement
 // ============================================================
 const express = require('express');
 const crypto  = require('crypto');
@@ -24,7 +24,7 @@ function isPremiumActive(user) {
     && new Date(user.subscription_end) > new Date();
 }
 
-// ── GET /api/subscription/status ─────────────────────────────
+// â”€â”€ GET /api/subscription/status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/status', authMiddleware, async (req, res) => {
   try {
     const db   = getDatabase();
@@ -34,7 +34,7 @@ router.get('/status', authMiddleware, async (req, res) => {
     const daysLeft = prem && user.subscription_end
       ? Math.ceil((new Date(user.subscription_end)-new Date())/86400000) : null;
 
-    // Dernière demande en attente
+    // DerniÃ¨re demande en attente
     const pending = await db.query(
       `SELECT id, plan, declared_amount, status, created_at FROM subscription_requests WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1`,
       [req.user.id]
@@ -58,7 +58,7 @@ router.get('/status', authMiddleware, async (req, res) => {
   } catch(e) { console.error(e); res.status(500).json({ error:'Erreur.' }); }
 });
 
-// ── POST /api/subscription/request ───────────────────────────
+// â”€â”€ POST /api/subscription/request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // User soumet sa preuve de paiement manuel
 router.post('/request', authMiddleware, async (req, res) => {
   try {
@@ -67,33 +67,33 @@ router.post('/request', authMiddleware, async (req, res) => {
     if (!PLANS[plan])
       return res.status(400).json({ error:'Plan invalide. Valeurs: premium_monthly, premium_yearly' });
     if (!payment_phone || payment_phone.replace(/\D/g,'').length < 8)
-      return res.status(400).json({ error:'Numéro Mobile Money invalide.' });
+      return res.status(400).json({ error:'NumÃ©ro Mobile Money invalide.' });
     if (!payment_operator)
-      return res.status(400).json({ error:'Opérateur requis.' });
+      return res.status(400).json({ error:'OpÃ©rateur requis.' });
     if (!declared_amount || parseInt(declared_amount) < PLANS[plan].price)
       return res.status(400).json({ error:`Montant minimum: ${PLANS[plan].price} FCFA pour ce plan.` });
 
     const db = getDatabase();
 
-    // Vérifier demande déjà en attente
+    // VÃ©rifier demande dÃ©jÃ  en attente
     const existPending = await db.query(
       `SELECT id FROM subscription_requests WHERE user_id=$1 AND status='pending' LIMIT 1`,
       [req.user.id]
     );
     if (existPending.length > 0)
       return res.status(409).json({
-        error:'Une demande est déjà en attente de validation. Attendez la réponse de l\'admin.',
+        error:'Une demande est dÃ©jÃ  en attente de validation. Attendez la rÃ©ponse de l\'admin.',
         request_id: existPending[0].id
       });
 
-    // Calculer les dates d'abonnement prévues
+    // Calculer les dates d'abonnement prÃ©vues
     const freshUser  = await db.findOne('users', { id:req.user.id });
     const base       = isPremiumActive(freshUser) && freshUser.subscription_end
       ? new Date(freshUser.subscription_end) : new Date();
     const planned_starts_at  = new Date(base).toISOString();
     const planned_expires_at = (() => { const d=new Date(base); d.setDate(d.getDate()+PLANS[plan].days); return d.toISOString(); })();
 
-    // Générer token admin sécurisé (pour les liens dans l'email)
+    // GÃ©nÃ©rer token admin sÃ©curisÃ© (pour les liens dans l'email)
     const adminToken     = crypto.randomBytes(32).toString('hex');
     const adminTokenHash = crypto.createHash('sha256').update(adminToken).digest('hex');
 
@@ -119,13 +119,13 @@ router.post('/request', authMiddleware, async (req, res) => {
     const BASE = process.env.BACKEND_URL || `http://localhost:${process.env.PORT||4000}`;
     const activationUrl = `${BASE}/api/admin/subscription/quick-action?token=${adminToken}&request_id=${reqId}`;
 
-    // Email à l'admin
+    // Email Ã  l'admin
     const adminEmailResult = await sendEmail({
       to: process.env.ADMIN_EMAIL,
       ...templateDemandeAdmin({
         requestId:       reqId,
         pseudo:          req.user.pseudo,
-        phone:           freshUser.phone_display || '—',
+        phone:           freshUser.phone_display || 'â€”',
         plan,
         amount:          parseInt(declared_amount),
         paymentPhone:    payment_phone.replace(/\s/g,''),
@@ -136,13 +136,13 @@ router.post('/request', authMiddleware, async (req, res) => {
     });
 
     if (!adminEmailResult.success)
-      console.warn('[sub/request] Email admin non envoyé:', adminEmailResult.error);
+      console.warn('[sub/request] Email admin non envoyÃ©:', adminEmailResult.error);
 
     res.json({
       success:     true,
       request_id:  reqId,
       status:      'pending',
-      message:     'Demande soumise avec succès ! L\'admin sera notifié et activera votre compte dans les 24h.',
+      message:     'Demande soumise avec succÃ¨s ! L\'admin sera notifiÃ© et activera votre compte dans les 24h.',
       plan,
       declared_amount: parseInt(declared_amount),
       planned_expires_at
@@ -154,7 +154,7 @@ router.post('/request', authMiddleware, async (req, res) => {
   }
 });
 
-// ── POST /api/subscription/cancel ────────────────────────────
+// â”€â”€ POST /api/subscription/cancel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/cancel', authMiddleware, async (req, res) => {
   try {
     const db   = getDatabase();
@@ -164,11 +164,11 @@ router.post('/cancel', authMiddleware, async (req, res) => {
       `UPDATE subscriptions SET cancelled_at=NOW(), cancel_reason=$1 WHERE user_id=$2 AND status='active'`,
       [req.body.reason||'user_request', req.user.id]
     );
-    res.json({ success:true, message:`Accès maintenu jusqu'au ${new Date(user.subscription_end).toLocaleDateString('fr-FR')}.` });
+    res.json({ success:true, message:`AccÃ¨s maintenu jusqu'au ${new Date(user.subscription_end).toLocaleDateString('fr-FR')}.` });
   } catch(e) { res.status(500).json({ error:'Erreur.' }); }
 });
 
-// ── Expiration automatique ────────────────────────────────────
+// â”€â”€ Expiration automatique â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function expireSubscriptions() {
   try {
     const db = getDatabase();
@@ -182,7 +182,7 @@ async function expireSubscriptions() {
         [u.id]
       );
     }
-    if (expired.length) console.log(`⏰ ${expired.length} abonnement(s) expiré(s) traité(s)`);
+    if (expired.length) console.log(`â° ${expired.length} abonnement(s) expirÃ©(s) traitÃ©(s)`);
   } catch(e) { console.error('[expire]', e); }
 }
 module.exports = router;
@@ -190,4 +190,5 @@ module.exports.expireSubscriptions = expireSubscriptions;
 
 if (process.env.NODE_ENV === 'production') {
   setInterval(expireSubscriptions, 60*60*1000); // toutes les heures
-}
+      }
+      
