@@ -19,7 +19,7 @@ const qsRouter    = require('./src/questions/questions.routes');
 const quizRouter = require('./src/quiz/quiz.routes');
 
 const app = express();
-
+app.set('trust proxy', 1);
 // ── CORS ✅ CORRIGÉ: accepte plusieurs origines ────────────────
 const allowedOrigins = [
   process.env.FRONTEND_URL,
