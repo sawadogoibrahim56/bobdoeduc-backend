@@ -1,5 +1,5 @@
 // ============================================================
-// src/quiz/quiz.routes.js â€” Moteur de quiz BobdoEduc
+// src/quiz/quiz.routes.js — Moteur de quiz BobdoEduc
 // ============================================================
 'use strict';
 const express = require('express');
@@ -9,7 +9,7 @@ const jwt     = require('jsonwebtoken');
 
 const router = express.Router();
 
-// â”€â”€ Auth inline (Ã©vite import circulaire) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Auth inline (évite import circulaire) ─────────────────────
 async function authMiddleware(req, res, next) {
   try {
     const header = req.headers.authorization;
@@ -20,7 +20,7 @@ async function authMiddleware(req, res, next) {
     try { decoded = jwt.verify(token, process.env.JWT_SECRET); }
     catch (e) {
       if (e.name === 'TokenExpiredError')
-        return res.status(401).json({ error: 'Token expirÃ©.', code: 'TOKEN_EXPIRED' });
+        return res.status(401).json({ error: 'Token expiré.', code: 'TOKEN_EXPIRED' });
       return res.status(401).json({ error: 'Token invalide.' });
     }
     if (decoded.type !== 'access')
@@ -53,9 +53,9 @@ async function quizAccessMiddleware(req, res, next) {
   }
 
   return res.status(402).json({
-    error:   'Quota gratuit Ã©puisÃ©.',
+    error:   'Quota gratuit épuisé.',
     code:    'PREMIUM_REQUIRED',
-    message: `Vous avez utilisÃ© vos ${FREE_LIMIT} quiz gratuits. Passez en Premium pour continuer.`,
+    message: `Vous avez utilisé vos ${FREE_LIMIT} quiz gratuits. Passez en Premium pour continuer.`,
     plans: {
       premium_monthly: { price: parseInt(process.env.PREMIUM_MONTHLY_PRICE) || 3000,  label: '3 000 FCFA / mois', duration: '1 mois' },
       premium_yearly:  { price: parseInt(process.env.PREMIUM_YEARLY_PRICE)  || 15000, label: '15 000 FCFA / an',  duration: '1 an'   }
@@ -66,7 +66,7 @@ async function quizAccessMiddleware(req, res, next) {
 router.use(authMiddleware);
 router.use(quizAccessMiddleware);
 
-// â”€â”€ Utilitaires â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Utilitaires ───────────────────────────────────────────────
 const signSess = (sid, uid, cycle) =>
   crypto.createHmac('sha256', process.env.HMAC_SECRET)
     .update(`${sid}:${uid}:${cycle}`).digest('hex');
@@ -85,7 +85,7 @@ function shuffleOnly(options, seed) {
   return shuffleWithMap(options, seed).map(o => o.t);
 }
 
-// â”€â”€ POST /api/quiz/start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── POST /api/quiz/start ──────────────────────────────────────
 router.post('/start', async (req, res) => {
   const userId = req.user.id;
   try {
@@ -100,7 +100,7 @@ router.post('/start', async (req, res) => {
       `SELECT id FROM quiz_sessions WHERE user_id=$1 AND is_active=true LIMIT 1`, [userId]
     );
     if (active[0])
-      return res.status(409).json({ error: 'Une session est dÃ©jÃ  en cours.', session_id: active[0].id });
+      return res.status(409).json({ error: 'Une session est déjà en cours.', session_id: active[0].id });
 
     let questions = await db.getUnseenQuestions(userId, cycle, 10);
 
@@ -153,17 +153,16 @@ router.post('/start', async (req, res) => {
 
   } catch (e) {
     console.error('[quiz/start]', e.message);
-    res.status(500).json({ error: 'Erreur dÃ©marrage quiz.' });
+    res.status(500).json({ error: 'Erreur démarrage quiz.' });
   }
 });
 
-// â”€â”€ POST /api/quiz/answer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-router.post('/answer', async (req, res) => {
+// ── POST /api/quiz/answer ─────────────────────────────────────router.post('/answer', async (req, res) => {
   const userId = req.user.id;
   try {
     const { session_id, question_id, answer_index, time_taken_ms } = req.body;
     if (!session_id || question_id === undefined)
-      return res.status(400).json({ error: 'DonnÃ©es manquantes.' });
+      return res.status(400).json({ error: 'Données manquantes.' });
 
     const db   = getDatabase();
     const rows = await db.query(
@@ -171,7 +170,7 @@ router.post('/answer', async (req, res) => {
       [session_id, userId]
     );
     const sess = rows[0];
-    if (!sess) return res.status(404).json({ error: 'Session introuvable ou dÃ©jÃ  terminÃ©e.' });
+    if (!sess) return res.status(404).json({ error: 'Session introuvable ou déjà terminée.' });
 
     const expectedHmac = signSess(sess.id, userId, sess.cycle);
     if (sess.hmac_signature !== expectedHmac) {
@@ -179,7 +178,7 @@ router.post('/answer', async (req, res) => {
         user_id: userId, action: 'quiz_tamper_detected', status: 'suspicious',
         ip_address: req.ip, metadata: JSON.stringify({ session_id })
       });
-      return res.status(403).json({ error: 'Session compromise dÃ©tectÃ©e.' });
+      return res.status(403).json({ error: 'Session compromise détectée.' });
     }
 
     const qIds = JSON.parse(sess.question_ids || '[]');
@@ -190,7 +189,7 @@ router.post('/answer', async (req, res) => {
       `SELECT id FROM quiz_answers WHERE session_id=$1 AND question_id=$2 LIMIT 1`,
       [session_id, question_id]
     );
-    if (already[0]) return res.status(409).json({ error: 'Question dÃ©jÃ  rÃ©pondue.' });
+    if (already[0]) return res.status(409).json({ error: 'Question déjà répondue.' });
 
     const qRows = await db.query(
       `SELECT q.*, c.name AS category_name FROM questions q
@@ -257,11 +256,11 @@ router.post('/answer', async (req, res) => {
 
   } catch (e) {
     console.error('[quiz/answer]', e.message);
-    res.status(500).json({ error: 'Erreur traitement rÃ©ponse.' });
+    res.status(500).json({ error: 'Erreur traitement réponse.' });
   }
 });
 
-// â”€â”€ POST /api/quiz/quit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── POST /api/quiz/quit ───────────────────────────────────────
 router.post('/quit', async (req, res) => {
   const userId = req.user.id;
   try {
@@ -283,7 +282,7 @@ router.post('/quit', async (req, res) => {
   }
 });
 
-// â”€â”€ GET /api/quiz/revisions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── GET /api/quiz/revisions ───────────────────────────────────
 router.get('/revisions', async (req, res) => {
   const userId = req.user.id;
   try {
@@ -306,17 +305,17 @@ router.get('/revisions', async (req, res) => {
         id: r.id, was_correct: r.was_correct, saved_at: r.saved_at,
         question: r.question_text, category: r.category_name,
         correct_answer: r[opts[r.correct_answer_index]],
-        user_answer: r.user_answer_idx !== null ? r[opts[r.user_answer_idx]] : 'Temps Ã©coulÃ©',
+        user_answer: r.user_answer_idx !== null ? r[opts[r.user_answer_idx]] : 'Temps écoulé',
         explanation: r.explanation
       })), page, limit
     });
   } catch (e) {
     console.error('[quiz/revisions]', e.message);
-    res.status(500).json({ error: 'Erreur chargement rÃ©visions.' });
+    res.status(500).json({ error: 'Erreur chargement révisions.' });
   }
 });
 
-// â”€â”€ GET /api/quiz/leaderboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── GET /api/quiz/leaderboard ─────────────────────────────────
 router.get('/leaderboard', async (req, res) => {
   try {
     const db = getDatabase();
@@ -334,5 +333,3 @@ router.get('/leaderboard', async (req, res) => {
 });
 
 module.exports = router;
-  
-    
