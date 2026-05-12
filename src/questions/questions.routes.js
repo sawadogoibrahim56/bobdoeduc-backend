@@ -1,93 +1,194 @@
 // ============================================================
-// src/questions/questions.routes.js â€” Admin BobdoEduc
-// AccÃ¨s: X-Admin-Key uniquement
+// src/subscription/subscription.routes.js — BOBDOEDUC VERSION B
+// Activation MANUELLE — l'admin vérifie et active manuellement
 // ============================================================
-'use strict';
 const express = require('express');
-const { getDatabase }    = require('../config/database');
-const { adminMiddleware } = require('../guards/auth.middleware');
+const crypto  = require('crypto');
+const { getDatabase } = require('../config/database');
+const { authMiddleware } = require('../guards/auth.middleware');
+const {
+  sendEmail, templateDemandeAdmin,
+  templateConfirmUser, templateActivated, templateRejected
+} = require('../config/mailer');
+
 const router = express.Router();
 
-router.use(adminMiddleware);
+const PLANS = {
+  premium_monthly: { price:3000,  label:'Premium Mensuel',  days:30  },
+  premium_yearly:  { price:15000, label:'Premium Annuel',   days:365 }
+};
 
-// POST /api/questions â€” Ajouter une question
-router.post('/', async (req, res) => {
-  try {
-    const { category_id, cycle, difficulty, question_text,
-            option_a, option_b, option_c, option_d,
-            correct_answer_index, explanation } = req.body;
+function isPremiumActive(user) {
+  return user?.plan !== 'free'
+    && user?.subscription_end
+    && new Date(user.subscription_end) > new Date();
+}
 
-    if (!category_id || !cycle || !question_text || correct_answer_index === undefined)
-      return res.status(400).json({ error: 'Champs requis: category_id, cycle, question_text, correct_answer_index.' });
-    if (![0,1,2,3].includes(Number(correct_answer_index)))
-      return res.status(400).json({ error: 'correct_answer_index doit Ãªtre 0, 1, 2 ou 3.' });
-    if (!option_a || !option_b || !option_c || !option_d)
-      return res.status(400).json({ error: 'Les 4 options sont requises.' });
-
-    const db = getDatabase();
-    const q  = await db.insert('questions', {
-      category_id, cycle,
-      difficulty: difficulty || 1,
-      question_text, option_a, option_b, option_c, option_d,
-      correct_answer_index: Number(correct_answer_index),
-      explanation: explanation || null
-    });
-    res.status(201).json({ success: true, id: q.id });
-  } catch (e) {
-    console.error('[questions/post]', e.message);
-    res.status(500).json({ error: 'Erreur ajout question.' });
-  }
-});
-
-// POST /api/questions/bulk â€” Ajout en masse (max 100)
-router.post('/bulk', async (req, res) => {
-  try {
-    const { questions } = req.body;
-    if (!Array.isArray(questions) || !questions.length)
-      return res.status(400).json({ error: 'Tableau questions requis.' });
-    if (questions.length > 100)
-      return res.status(400).json({ error: 'Maximum 100 questions par lot.' });
-
-    const db  = getDatabase();
-    const ids = [];
-    for (const q of questions) {
-      const r = await db.insert('questions', q);
-      ids.push(r.id);
-    }
-    res.status(201).json({ success: true, count: ids.length, ids });
-  } catch (e) {
-    console.error('[questions/bulk]', e.message);
-    res.status(500).json({ error: 'Erreur ajout en masse.' });
-  }
-});
-
-// GET /api/questions/stats â€” Statistiques
-router.get('/stats', async (req, res) => {
+// ── GET /api/subscription/status ─────────────────────────────
+router.get('/status', authMiddleware, async (req, res) => {
   try {
     const db   = getDatabase();
-    const rows = await db.query(
-      `SELECT cycle, COUNT(*) as cnt FROM questions WHERE is_active=true GROUP BY cycle`, []
+    const user = await db.findOne('users', { id:req.user.id });
+    const FREE = parseInt(process.env.FREE_QUIZ_LIMIT)||20;
+    const prem = isPremiumActive(user);
+    const daysLeft = prem && user.subscription_end
+      ? Math.ceil((new Date(user.subscription_end)-new Date())/86400000) : null;
+
+    // Dernière demande en attente
+    const pending = await db.query(
+      `SELECT id, plan, declared_amount, status, created_at FROM subscription_requests WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1`,
+      [req.user.id]
     );
-    const stats = { cycle_c: 0, cycle_b: 0, cycle_a: 0 };
-    rows.forEach(r => { if (stats[r.cycle] !== undefined) stats[r.cycle] = parseInt(r.cnt); });
-    res.json({ stats, total: Object.values(stats).reduce((a,b) => a+b, 0) });
-  } catch (e) {
-    console.error('[questions/stats]', e.message);
-    res.status(500).json({ error: 'Erreur stats.' });
+    const history = await db.findMany('subscriptions', { user_id:req.user.id },
+      { orderBy:'created_at', order:'DESC', limit:5 });
+
+    res.json({
+      plan: user.plan, is_premium: prem,
+      subscription_end: user.subscription_end || null, days_left: daysLeft,
+      quiz_free_used:     user.quiz_free_used||0,
+      quiz_free_remaining:Math.max(0, FREE-(user.quiz_free_used||0)),
+      free_limit: FREE,
+      latest_request: pending[0] || null,
+      plans: {
+        premium_monthly: { price:3000,  label:'3 000 FCFA / mois', duration:'1 mois' },
+        premium_yearly:  { price:15000, label:'15 000 FCFA / an',  duration:'1 an'   }
+      },
+      history: history.map(s=>({ plan:s.plan, amount:s.amount, status:s.status, expires_at:s.expires_at }))
+    });
+  } catch(e) { console.error(e); res.status(500).json({ error:'Erreur.' }); }
+});
+
+// ── POST /api/subscription/request ───────────────────────────
+// User soumet sa preuve de paiement manuel
+router.post('/request', authMiddleware, async (req, res) => {
+  try {
+    const { plan, declared_amount, payment_phone, payment_operator, notes } = req.body;
+
+    if (!PLANS[plan])
+      return res.status(400).json({ error:'Plan invalide. Valeurs: premium_monthly, premium_yearly' });
+    if (!payment_phone || payment_phone.replace(/\D/g,'').length < 8)
+      return res.status(400).json({ error:'Numéro Mobile Money invalide.' });
+    if (!payment_operator)
+      return res.status(400).json({ error:'Opérateur requis.' });
+    if (!declared_amount || parseInt(declared_amount) < PLANS[plan].price)
+      return res.status(400).json({ error:`Montant minimum: ${PLANS[plan].price} FCFA pour ce plan.` });
+
+    const db = getDatabase();
+
+    // Vérifier demande déjà en attente
+    const existPending = await db.query(
+      `SELECT id FROM subscription_requests WHERE user_id=$1 AND status='pending' LIMIT 1`,
+      [req.user.id]
+    );
+    if (existPending.length > 0)
+      return res.status(409).json({
+        error:'Une demande est déjà en attente de validation. Attendez la réponse de l\'admin.',
+        request_id: existPending[0].id
+      });
+
+    // Calculer les dates d'abonnement prévues
+    const freshUser  = await db.findOne('users', { id:req.user.id });
+    const base       = isPremiumActive(freshUser) && freshUser.subscription_end
+      ? new Date(freshUser.subscription_end) : new Date();
+    const planned_starts_at  = new Date(base).toISOString();
+    const planned_expires_at = (() => { const d=new Date(base); d.setDate(d.getDate()+PLANS[plan].days); return d.toISOString(); })();
+
+    // Générer token admin sécurisé (pour les liens dans l'email)
+    const adminToken     = crypto.randomBytes(32).toString('hex');
+    const adminTokenHash = crypto.createHash('sha256').update(adminToken).digest('hex');
+
+    const reqId = crypto.randomBytes(16).toString('hex');
+
+    await db.insert('subscription_requests', {
+      id:               reqId,
+      user_id:          req.user.id,
+      plan,
+      declared_amount:  parseInt(declared_amount),
+      payment_phone:    payment_phone.replace(/\s/g,''),
+      payment_operator,
+      notes:            notes?.slice(0,300) || null,
+      status:           'pending',
+      admin_token_hash: adminTokenHash,
+      token_expires_at: new Date(Date.now() + 72*60*60*1000).toISOString(),
+      planned_starts_at,
+      planned_expires_at,
+      ip_address: req.ip
+    });
+
+    // URL rapide dans l'email (cliquable)
+    const BASE = process.env.BACKEND_URL || `http://localhost:${process.env.PORT||4000}`;
+    const activationUrl = `${BASE}/api/admin/subscription/quick-action?token=${adminToken}&request_id=${reqId}`;
+
+    // Email à l'admin
+    const adminEmailResult = await sendEmail({
+      to: process.env.ADMIN_EMAIL,
+      ...templateDemandeAdmin({
+        requestId:       reqId,
+        pseudo:          req.user.pseudo,
+        phone:           freshUser.phone_display || '—',
+        plan,
+        amount:          parseInt(declared_amount),
+        paymentPhone:    payment_phone.replace(/\s/g,''),
+        paymentOperator: payment_operator,
+        notes,
+        activationUrl
+      })
+    });
+
+    if (!adminEmailResult.success)
+      console.warn('[sub/request] Email admin non envoyé:', adminEmailResult.error);
+
+    res.json({
+      success:     true,
+      request_id:  reqId,
+      status:      'pending',
+      message:     'Demande soumise avec succès ! L\'admin sera notifié et activera votre compte dans les 24h.',
+      plan,
+      declared_amount: parseInt(declared_amount),
+      planned_expires_at
+    });
+
+  } catch(e) {
+    console.error('[sub/request]', e);
+    res.status(500).json({ error:'Erreur soumission de la demande.' });
   }
 });
 
-// DELETE /api/questions/:id â€” DÃ©sactiver une question
-router.delete('/:id', async (req, res) => {
+// ── POST /api/subscription/cancel ────────────────────────────
+router.post('/cancel', authMiddleware, async (req, res) => {
+  try {
+    const db   = getDatabase();
+    const user = await db.findOne('users', { id:req.user.id });
+    if (!isPremiumActive(user)) return res.status(400).json({ error:'Aucun abonnement actif.' });
+    await db.query(
+      `UPDATE subscriptions SET cancelled_at=NOW(), cancel_reason=$1 WHERE user_id=$2 AND status='active'`,
+      [req.body.reason||'user_request', req.user.id]
+    );
+    res.json({ success:true, message:`Accès maintenu jusqu'au ${new Date(user.subscription_end).toLocaleDateString('fr-FR')}.` });
+  } catch(e) { res.status(500).json({ error:'Erreur.' }); }
+});
+
+// ── Expiration automatique ────────────────────────────────────
+async function expireSubscriptions() {
   try {
     const db = getDatabase();
-    await db.update('questions', { is_active: false }, { id: req.params.id });
-    res.json({ success: true, message: 'Question dÃ©sactivÃ©e.' });
-  } catch (e) {
-    console.error('[questions/delete]', e.message);
-    res.status(500).json({ error: 'Erreur dÃ©sactivation.' });
-  }
-});
-
+    const expired = await db.query(
+      `SELECT id FROM users WHERE plan!='free' AND subscription_end IS NOT NULL AND subscription_end < NOW()`, []
+    );
+    for (const u of expired) {
+      await db.update('users', { plan:'free' }, { id:u.id });
+      await db.query(
+        `UPDATE subscriptions SET status='expired' WHERE user_id=$1 AND status='active' AND expires_at < NOW()`,
+        [u.id]
+      );
+    }
+    if (expired.length) console.log(`⏰ ${expired.length} abonnement(s) expiré(s) traité(s)`);
+  } catch(e) { console.error('[expire]', e); }
+}
 module.exports = router;
-           
+module.exports.expireSubscriptions = expireSubscriptions;
+
+if (process.env.NODE_ENV === 'production') {
+  setInterval(expireSubscriptions, 60*60*1000); // toutes les heures
+                        }
+      
