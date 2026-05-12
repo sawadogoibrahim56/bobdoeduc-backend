@@ -24,6 +24,14 @@ class DatabaseAdapter {
 // ══════════════════════════════════════════════════════════
 // POSTGRESQL
 // ══════════════════════════════════════════════════════════
+// Whitelist des tables autorisées (sécurité)
+const ALLOWED_TABLES = [
+  'users', 'otp_tokens', 'refresh_tokens', 'categories',
+  'questions', 'quiz_sessions', 'quiz_answers', 'revisions',
+  'user_seen_questions', 'subscriptions', 'subscription_requests',
+  'audit_logs'
+];
+
 class PostgresAdapter extends DatabaseAdapter {
   constructor() {
     super();
@@ -49,6 +57,7 @@ class PostgresAdapter extends DatabaseAdapter {
   }
 
   async findOne(table, where = {}) {
+    if (!ALLOWED_TABLES.includes(table)) throw new Error(`Table non autorisée: ${table}`);
     const keys = Object.keys(where);
     if (!keys.length) return null;
     const conds = keys.map((k, i) => `"${k}" = $${i+1}`).join(' AND ');
@@ -60,6 +69,7 @@ class PostgresAdapter extends DatabaseAdapter {
   }
 
   async findMany(table, where = {}, opts = {}) {
+    if (!ALLOWED_TABLES.includes(table)) throw new Error(`Table non autorisée: ${table}`);
     const keys = Object.keys(where);
     const vals = Object.values(where);
     let sql = `SELECT * FROM "${table}"`;
@@ -71,6 +81,7 @@ class PostgresAdapter extends DatabaseAdapter {
   }
 
   async insert(table, data) {
+    if (!ALLOWED_TABLES.includes(table)) throw new Error(`Table non autorisée: ${table}`);
     const keys = Object.keys(data);
     const vals = Object.values(data);
     const cols = keys.map(k => `"${k}"`).join(', ');
@@ -83,6 +94,7 @@ class PostgresAdapter extends DatabaseAdapter {
   }
 
   async update(table, data, where) {
+    if (!ALLOWED_TABLES.includes(table)) throw new Error(`Table non autorisée: ${table}`);
     const dataKeys  = Object.keys(data);
     const dataVals  = Object.values(data);
     const whereKeys = Object.keys(where);
@@ -103,6 +115,7 @@ class PostgresAdapter extends DatabaseAdapter {
   }
 
   async count(table, where = {}) {
+    if (!ALLOWED_TABLES.includes(table)) throw new Error(`Table non autorisée: ${table}`);
     const keys = Object.keys(where);
     let sql = `SELECT COUNT(*) FROM "${table}"`;
     if (keys.length) sql += ' WHERE ' + keys.map((k,i) => `"${k}" = $${i+1}`).join(' AND ');
@@ -159,4 +172,3 @@ function getDatabase() {
 }
 
 module.exports = { getDatabase };
-      
