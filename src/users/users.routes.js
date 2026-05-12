@@ -1,5 +1,5 @@
 // ============================================================
-// src/users/users.routes.js â€” Profil BobdoEduc
+// src/users/users.routes.js — Profil BobdoEduc
 // ============================================================
 'use strict';
 const express = require('express');
@@ -44,11 +44,11 @@ router.patch('/pseudo', async (req, res) => {
   try {
     const { pseudo } = req.body;
     if (!pseudo || pseudo.length < 2 || pseudo.length > 30)
-      return res.status(400).json({ error: 'Pseudo entre 2 et 30 caractÃ¨res.' });
+      return res.status(400).json({ error: 'Pseudo entre 2 et 30 caractères.' });
     const db = getDatabase();
     const ex = await db.findOne('users', { pseudo });
     if (ex && ex.id !== req.user.id)
-      return res.status(409).json({ error: 'Pseudo dÃ©jÃ  pris.' });
+      return res.status(409).json({ error: 'Pseudo déjà pris.' });
     await db.update('users', { pseudo }, { id: req.user.id });
     res.json({ success: true, pseudo });
   } catch (e) {
@@ -62,7 +62,7 @@ router.patch('/password', async (req, res) => {
   try {
     const { old_password, new_password } = req.body;
     if (!old_password || !new_password || new_password.length < 8)
-      return res.status(400).json({ error: 'DonnÃ©es invalides. Nouveau mot de passe min 8 caractÃ¨res.' });
+      return res.status(400).json({ error: 'Données invalides. Nouveau mot de passe min 8 caractères.' });
     const db   = getDatabase();
     const user = await db.findOne('users', { id: req.user.id });
     if (!await bcrypt.compare(old_password, user.password_hash))
@@ -70,7 +70,7 @@ router.patch('/password', async (req, res) => {
     const hash = await bcrypt.hash(new_password, parseInt(process.env.BCRYPT_ROUNDS_PASSWORD) || 12);
     await db.update('users', { password_hash: hash }, { id: req.user.id });
     await db.query(`UPDATE refresh_tokens SET is_revoked=true WHERE user_id=$1`, [req.user.id]);
-    res.json({ success: true, message: 'Mot de passe modifiÃ©. Reconnectez-vous.' });
+    res.json({ success: true, message: 'Mot de passe modifié. Reconnectez-vous.' });
   } catch (e) {
     console.error('[users/password]', e.message);
     res.status(500).json({ error: 'Erreur.' });
@@ -78,4 +78,4 @@ router.patch('/password', async (req, res) => {
 });
 
 module.exports = router;
-                          
+      
