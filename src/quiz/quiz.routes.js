@@ -157,7 +157,8 @@ router.post('/start', async (req, res) => {
   }
 });
 
-// ── POST /api/quiz/answer ─────────────────────────────────────router.post('/answer', async (req, res) => {
+// ── POST /api/quiz/answer ─────────────────────────────────────
+router.post('/answer', async (req, res) => {
   const userId = req.user.id;
   try {
     const { session_id, question_id, answer_index, time_taken_ms } = req.body;
