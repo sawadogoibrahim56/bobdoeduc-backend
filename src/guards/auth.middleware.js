@@ -1,5 +1,5 @@
 // ============================================================
-// src/guards/auth.middleware.js â€” Middlewares uniquement
+// src/guards/auth.middleware.js — Middlewares uniquement
 // ============================================================
 'use strict';
 const jwt = require('jsonwebtoken');
@@ -17,7 +17,7 @@ async function authMiddleware(req, res, next) {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (e) {
       if (e.name === 'TokenExpiredError')
-        return res.status(401).json({ error: 'Token expirÃ©.', code: 'TOKEN_EXPIRED' });
+        return res.status(401).json({ error: 'Token expiré.', code: 'TOKEN_EXPIRED' });
       return res.status(401).json({ error: 'Token invalide.' });
     }
 
@@ -40,7 +40,7 @@ async function authMiddleware(req, res, next) {
 function adminMiddleware(req, res, next) {
   const key = req.headers['x-admin-key'];
   if (!key || key !== process.env.ADMIN_SECRET_KEY)
-    return res.status(403).json({ error: 'AccÃ¨s refusÃ©. ClÃ© admin invalide.' });
+    return res.status(403).json({ error: 'Accès refusé. Clé admin invalide.' });
   next();
 }
 
@@ -64,9 +64,9 @@ async function quizAccessMiddleware(req, res, next) {
   }
 
   return res.status(402).json({
-    error:   'Quota gratuit Ã©puisÃ©.',
+    error:   'Quota gratuit épuisé.',
     code:    'PREMIUM_REQUIRED',
-    message: `Vous avez utilisÃ© vos ${FREE_LIMIT} quiz gratuits. Passez en Premium pour continuer.`,
+    message: `Vous avez utilisé vos ${FREE_LIMIT} quiz gratuits. Passez en Premium pour continuer.`,
     plans: {
       premium_monthly: {
         price: parseInt(process.env.PREMIUM_MONTHLY_PRICE) || 3000,
@@ -81,4 +81,4 @@ async function quizAccessMiddleware(req, res, next) {
 }
 
 module.exports = { authMiddleware, adminMiddleware, quizAccessMiddleware };
-                        
+                  
