@@ -127,7 +127,8 @@ router.get('/subscription/quick-action', async (req, res) => {
 });
 
 // ── GET /api/admin/requests ───────────────────────────────────
-// Lister toutes les demandes (pour le panel admin)router.get('/requests', adminMiddleware, async (req, res) => {
+// Lister toutes les demandes (pour le panel admin)
+router.get('/requests', adminMiddleware, async (req, res) => {
   try {
     const db     = getDatabase();
     const status = req.query.status || 'pending'; // pending|approved|rejected|all
@@ -135,22 +136,33 @@ router.get('/subscription/quick-action', async (req, res) => {
     const limit  = 20;
     const offset = (page-1)*limit;
 
-    // Parameterized queries - no SQL injection risk
-    const BASE_SQL = `
-      SELECT sr.*, u.pseudo, u.phone_hash
-      FROM subscription_requests sr
-      JOIN users u ON u.id = sr.user_id`;
+    // Requêtes paramétrées sécurisées
+    let rows, totalRows;
+    if (status === 'all') {
+      rows = await db.query(
+        `SELECT sr.*, u.pseudo, u.phone_hash
+         FROM subscription_requests sr
+         JOIN users u ON u.id = sr.user_id
+         ORDER BY sr.created_at DESC LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+      totalRows = await db.query(`SELECT COUNT(*) as cnt FROM subscription_requests`, []);
+    } else {
+      rows = await db.query(
+        `SELECT sr.*, u.pseudo, u.phone_hash
+         FROM subscription_requests sr
+         JOIN users u ON u.id = sr.user_id
+         WHERE sr.status=$1
+         ORDER BY sr.created_at DESC LIMIT $2 OFFSET $3`,
+        [status, limit, offset]
+      );
+      totalRows = await db.query(
+        `SELECT COUNT(*) as cnt FROM subscription_requests WHERE status=$1`,
+        [status]
+      );
+    }
 
-    const rows = status === 'all'
-      ? await db.query(BASE_SQL + ` ORDER BY sr.created_at DESC LIMIT $1 OFFSET $2`, [limit, offset])
-      : await db.query(BASE_SQL + ` WHERE sr.status=$1 ORDER BY sr.created_at DESC LIMIT $2 OFFSET $3`, [status, limit, offset]);
-
-    const totalRows = status === 'all'
-      ? await db.query(`SELECT COUNT(*) as cnt FROM subscription_requests`, [])
-      : await db.query(`SELECT COUNT(*) as cnt FROM subscription_requests WHERE status=$1`, [status]);
-    const total = totalRows;
-
-    res.json({ requests:rows, total:parseInt(total[0]?.cnt||0), page, limit });
+    res.json({ requests:rows, total:parseInt(totalRows[0]?.cnt||0), page, limit });
   } catch(e) { res.status(500).json({ error:'Erreur.' }); }
 });
 
@@ -239,4 +251,3 @@ function htmlPage(title, message, color='#1A73E8') {
 }
 
 module.exports = router;
-
