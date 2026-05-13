@@ -1,59 +1,27 @@
 // ============================================================
 // src/config/mailer.js — BobdoEduc
-// Supporte: Gmail, Brevo (SMTP), console (dev)
+// Supporte: Resend (prod), Brevo (SMTP), console (dev)
 // ============================================================
 'use strict';
 require('dotenv').config();
-const nodemailer = require('nodemailer');
 
+// ── Resend (HTTP, port 443 — compatible Render free tier) ────
+let _resend = null;
+function getResend() {
+  if (!_resend) {
+    const { Resend } = require('resend');
+    _resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return _resend;
+}
+
+// ── Nodemailer (Brevo / SMTP générique) ──────────────────────
 let _transporter = null;
-
-function createTransport() {
-  const provider = process.env.EMAIL_PROVIDER || 'console';
-
-  // ── MODE CONSOLE (dev / pas de config email) ──────────────
-  if (provider === 'console' ||
-      !process.env.GMAIL_USER && !process.env.SMTP_USER) {
-    console.log('[MAILER] Mode console DEV - emails affichés dans les logs');
-    return {
-      sendMail: async (opts) => {
-        console.log('\n' + '═'.repeat(50));
-        console.log('📧 EMAIL (mode console)');
-        console.log('   À      :', opts.to);
-        console.log('   Sujet  :', opts.subject);
-        // Extraire l'OTP du HTML si présent
-        const otpMatch = opts.html && opts.html.match(/font-size:36px[^>]*>(\d{6})</);
-        if (otpMatch) console.log('   OTP    :', otpMatch[1]);
-        console.log('═'.repeat(50) + '\n');
-        return { messageId: 'console-' + Date.now(), success: true };
-      }
-    };
-  }
-
-  // ── GMAIL ─────────────────────────────────────────────────
-  if (provider === 'gmail') {
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS ||
-        process.env.GMAIL_PASS.includes('xxxx')) {
-      console.warn('[MAILER] Gmail non configuré → mode console');
-      return createConsoleTransport();
-    }
-    console.log('[MAILER] Gmail SMTP configuré pour:', process.env.GMAIL_USER);
-    return nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS,
-      },
-      tls: { rejectUnauthorized: false }
-    });
-  }
-
-  // ── BREVO / SMTP GÉNÉRIQUE ────────────────────────────────
-  if (provider === 'brevo' || provider === 'smtp') {
+function getTransporter() {
+  if (!_transporter) {
+    const nodemailer = require('nodemailer');
     console.log('[MAILER] SMTP configuré:', process.env.SMTP_HOST);
-    return nodemailer.createTransport({
+    _transporter = nodemailer.createTransport({
       host:   process.env.SMTP_HOST   || 'smtp-relay.brevo.com',
       port:   parseInt(process.env.SMTP_PORT) || 587,
       secure: false,
@@ -64,41 +32,65 @@ function createTransport() {
       tls: { rejectUnauthorized: false }
     });
   }
-
-  return createConsoleTransport();
-}
-
-function createConsoleTransport() {
-  return {
-    sendMail: async (opts) => {
-      console.log('\n📧 [EMAIL CONSOLE]', opts.to, '-', opts.subject);
-      return { messageId: 'console-' + Date.now(), success: true };
-    }
-  };
-}
-
-function getTransporter() {
-  if (!_transporter) _transporter = createTransport();
   return _transporter;
 }
 
 // ── Envoyer un email ──────────────────────────────────────────
 async function sendEmail({ to, subject, html, text }) {
-  try {
-    const transporter = getTransporter();
-    const result = await transporter.sendMail({
-      from: `"BobdoEduc" <${process.env.GMAIL_USER || process.env.SMTP_USER || 'noreply@bobdoeduc.com'}>`,
-      to, subject, html, text
-    });
-    console.log('[MAILER] Email envoyé à', to, '- ID:', result.messageId);
-    return { success: true, messageId: result.messageId };
-  } catch (e) {
-    console.error('[MAILER] Erreur envoi à', to, ':', e.message);
-    return { success: false, error: e.message };
+  const provider = process.env.EMAIL_PROVIDER || 'console';
+
+  // ── MODE CONSOLE (dev) ────────────────────────────────────
+  if (provider === 'console') {
+    console.log('\n' + '═'.repeat(50));
+    console.log('📧 EMAIL (mode console)');
+    console.log('   À      :', to);
+    console.log('   Sujet  :', subject);
+    const otpMatch = html && html.match(/letter-spacing:10px[^>]*>(\d{6})</);
+    if (otpMatch) console.log('   OTP    :', otpMatch[1]);
+    console.log('═'.repeat(50) + '\n');
+    return { success: true, messageId: 'console-' + Date.now() };
   }
+
+  // ── RESEND (recommandé sur Render) ────────────────────────
+  if (provider === 'resend') {
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('[MAILER] RESEND_API_KEY manquante → mode console');
+      return sendEmail({ to, subject, html, text });
+    }
+    try {
+      const resend = getResend();
+      const from = process.env.EMAIL_FROM || 'BobdoEduc <noreply@bobdoeduc.com>';
+      const { data, error } = await resend.emails.send({ from, to, subject, html, text });
+      if (error) throw new Error(error.message);
+      console.log('[MAILER] Email envoyé via Resend à', to, '- ID:', data.id);
+      return { success: true, messageId: data.id };
+    } catch (e) {
+      console.error('[MAILER] Erreur Resend à', to, ':', e.message);
+      return { success: false, error: e.message };
+    }
+  }
+
+  // ── BREVO / SMTP GÉNÉRIQUE ────────────────────────────────
+  if (provider === 'brevo' || provider === 'smtp') {
+    try {
+      const transporter = getTransporter();
+      const from = process.env.EMAIL_FROM
+        || `"BobdoEduc" <${process.env.SMTP_USER || 'noreply@bobdoeduc.com'}>`;
+      const result = await transporter.sendMail({ from, to, subject, html, text });
+      console.log('[MAILER] Email envoyé via SMTP à', to, '- ID:', result.messageId);
+      return { success: true, messageId: result.messageId };
+    } catch (e) {
+      console.error('[MAILER] Erreur SMTP à', to, ':', e.message);
+      return { success: false, error: e.message };
+    }
+  }
+
+  // Fallback console
+  console.warn('[MAILER] Provider inconnu:', provider, '→ mode console');
+  return sendEmail({ to, subject, html, text });
 }
 
-// ── Templates ─────────────────────────────────────────────────
+// ── Templates (inchangés) ──────────────────────────────────────
 function templateOTP(otp, purpose) {
   const isReset = purpose === 'reset_password';
   return {
@@ -175,7 +167,7 @@ function templateActivated({ pseudo, plan, expiresAt }) {
 
 function templateRejected({ pseudo, reason }) {
   return {
-    subject: 'BobdoEduc — Demande d\'abonnement non validée',
+    subject: "BobdoEduc — Demande d'abonnement non validée",
     html: `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:20px;font-family:Arial,sans-serif;background:#f5f5f5">
