@@ -1,5 +1,5 @@
 // ============================================================
-// src/auth/auth.routes.js — BobdoEduc-recuperation compte corrigé 
+// src/auth/auth.routes.js — BobdoEduc
 // ============================================================
 'use strict';
 const express  = require('express');
@@ -190,7 +190,8 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
-// ── POST /api/auth/register ───────────────────────────────router.post('/register', async (req, res) => {
+// ── POST /api/auth/register ───────────────────────────────────
+router.post('/register', async (req, res) => {
   try {
     const { phone, email, password, pseudo, verify_token } = req.body;
 
@@ -297,7 +298,9 @@ router.post('/login', async (req, res) => {
       user = await db.findOne('users', { email_hash: hashEmail(email.toLowerCase().trim()) });
     } else {
       user = await db.findOne('users', { phone_hash: hashPhone(phone.replace(/\s/g,'')) });
-           }if (!user) {
+    }
+
+    if (!user) {
       await logAudit(null, 'login', 'failed', req, { reason: 'not_found' });
       return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect.' });
     }
@@ -322,9 +325,7 @@ router.post('/login', async (req, res) => {
           ? 'Trop de tentatives. Compte bloqué 30 minutes.'
           : 'Mot de passe incorrect.'
       });
-    }
-
-    await db.update('users', {
+      }await db.update('users', {
       failed_login_attempts: 0,
       locked_until: null,
       last_login: new Date().toISOString()
@@ -476,7 +477,8 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 
-// ── POST /api/auth/reset-password ────────────────────────────router.post('/reset-password', async (req, res) => {
+// ── POST /api/auth/reset-password ────────────────────────────
+router.post('/reset-password', async (req, res) => {
   try {
     const { phone, email, new_password, verify_token } = req.body;
 
@@ -530,4 +532,3 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 module.exports = router;
-    
