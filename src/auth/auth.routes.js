@@ -1,5 +1,5 @@
 // ============================================================
-// src/auth/auth.routes.js — BobdoEduc Audité 
+// src/auth/auth.routes.js — BobdoEduc-recuperation compte corrigé 
 // ============================================================
 'use strict';
 const express  = require('express');
@@ -190,8 +190,7 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
-// ── POST /api/auth/register ───────────────────────────────────
-router.post('/register', async (req, res) => {
+// ── POST /api/auth/register ───────────────────────────────router.post('/register', async (req, res) => {
   try {
     const { phone, email, password, pseudo, verify_token } = req.body;
 
@@ -254,7 +253,8 @@ router.post('/register', async (req, res) => {
       ...userData, pseudo, password_hash,
       is_verified: true, plan: 'free', quiz_free_used: 0
     });
-  const { accessToken, refreshToken } = generateTokens(user.id);
+
+    const { accessToken, refreshToken } = generateTokens(user.id);
     const rt_hash = crypto.createHash('sha256').update(refreshToken).digest('hex');
     await db.insert('refresh_tokens', {
       user_id:    user.id,
@@ -297,9 +297,7 @@ router.post('/login', async (req, res) => {
       user = await db.findOne('users', { email_hash: hashEmail(email.toLowerCase().trim()) });
     } else {
       user = await db.findOne('users', { phone_hash: hashPhone(phone.replace(/\s/g,'')) });
-    }
-
-    if (!user) {
+           }if (!user) {
       await logAudit(null, 'login', 'failed', req, { reason: 'not_found' });
       return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect.' });
     }
@@ -477,4 +475,59 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
+
+// ── POST /api/auth/reset-password ────────────────────────────router.post('/reset-password', async (req, res) => {
+  try {
+    const { phone, email, new_password, verify_token } = req.body;
+
+    if (!new_password || new_password.length < 8)
+      return res.status(400).json({ error: 'Nouveau mot de passe minimum 8 caractères.' });
+    if (!phone && !email)
+      return res.status(400).json({ error: 'Email ou téléphone requis.' });
+
+    // Vérifier le token OTP
+    let decoded;
+    try {
+      decoded = jwt.verify(verify_token, process.env.JWT_SECRET);
+    } catch(e) {
+      return res.status(400).json({ error: 'Session expirée. Recommencez.' });
+    }
+    if (!decoded.verified || decoded.purpose !== 'reset_password')
+      return res.status(400).json({ error: 'Token invalide.' });
+
+    const db = getDatabase();
+    let user;
+    if (email) {
+      user = await db.findOne('users', { email_hash: hashEmail(email.toLowerCase().trim()) });
+    } else {
+      user = await db.findOne('users', { phone_hash: hashPhone(phone.replace(/\s/g,'')) });
+    }
+
+    if (!user)
+      return res.status(404).json({ error: 'Compte introuvable.' });
+
+    const password_hash = await bcrypt.hash(
+      new_password,
+      parseInt(process.env.BCRYPT_ROUNDS_PASSWORD) || 12
+    );
+
+    await db.update('users', { password_hash, failed_login_attempts: 0, locked_until: null }, { id: user.id });
+
+    // Révoquer tous les refresh tokens
+    await db.query(`UPDATE refresh_tokens SET is_revoked=true WHERE user_id=$1`, [user.id]);
+
+    await logAudit(user.id, 'password_reset', 'success', req);
+
+    res.json({
+      success: true,
+      message: 'Mot de passe réinitialisé avec succès. Connectez-vous.'
+    });
+
+  } catch(e) {
+    console.error('[reset-password]', e.message);
+    res.status(500).json({ error: 'Erreur réinitialisation: ' + e.message });
+  }
+});
+
 module.exports = router;
+    
