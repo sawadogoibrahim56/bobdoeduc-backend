@@ -280,7 +280,7 @@ router.post('/register', async (req, res) => { // Ajout de async
       refresh_token: refreshToken
     });
 
-  } catch(e) {
+  catch(e) {
     console.error('[register]', e.message);
     res.status(500).json({ error: 'Erreur inscription: ' + e.message });
   }
