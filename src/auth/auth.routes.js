@@ -217,6 +217,8 @@ router.post('/register', async (req, res) => {
     const db = getDatabase();
 
     // Vérifier pseudo unique
+    // Après (Correction) :
+router.post('/register', async (req, res) => { // Ajout de async
     const existPs = await db.findOne('users', { pseudo });
     if (existPs) return res.status(409).json({ error: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
 
